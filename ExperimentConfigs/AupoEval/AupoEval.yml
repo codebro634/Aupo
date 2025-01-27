@@ -1,0 +1,106 @@
+seed: 42
+episodes: 2000
+executable: ./cmake-build-debug/BenchmarkGames.exe
+
+agents:
+
+  - mcts:
+      agent_type: mcts
+      agent_args:
+        iterations: [100,200,500,1000,1500,2000]
+        expfacs: [-1;2, 2;2]
+        dag: [0]
+        dynamic_exp_factor: [1]
+        rollout_length: [50]
+
+  - aupo_all:
+      agent_type: aupo
+      agent_args:
+        iterations: [100,200,500,1000,1500,2000]
+        expfacs: [-1;2]
+        confidence: [0.8,0.9,0.95,0.99]
+        distribution_layers: [1,2,3,4]
+        use_rollout_distribution: [0,1]
+        filter_by_std: [0,1]
+        rollout_length: [50]
+        min_samples: [0]
+        smart_uniform_sampling: [0]
+
+  - aupo_smart_sampling:
+      agent_type: aupo
+      agent_args:
+        iterations: [ 100,200,500,1000,1500,2000 ]
+        expfacs: [ -1;2 ]
+        confidence: [ 0.8 ]
+        distribution_layers: [ 4 ]
+        use_rollout_distribution: [ 0 ]
+        filter_by_std: [ 0 ]
+        rollout_length: [ 50 ]
+        min_samples: [ 20 ]
+        smart_uniform_sampling: [ 1 ]
+        smart_sampling_q: [0.5,0.75,0.9,0.95,0.99]
+
+  - aupo_uct_root:
+      agent_type: aupo
+      agent_args:
+        iterations: [ 100,200,500,1000,1500,2000 ]
+        expfacs: [ 2;2 ]
+        confidence: [ 0.8 ]
+        distribution_layers: [ 4 ]
+        use_rollout_distribution: [ 0 ]
+        filter_by_std: [ 0 ]
+        rollout_length: [ 50 ]
+        min_samples: [ 0 ]
+        smart_uniform_sampling: [ 0 ]
+
+models:
+
+  - sa:
+        model_type : sa
+        model_args:
+            map: ../../resources/SysAdminTopologies/4.txt
+        horizons: [ 50,50 ]
+
+  - gol:
+        model_type: gol
+        model_args:
+            map: ../../resources/GameOfLifeMaps/3.txt
+        horizons: [ 50,50 ]
+
+  - aa:
+        model_type: aa
+        model_args:
+              map: ../../resources/AcademicAdvisingCourses/2.txt
+              dense_rewards: 1
+        horizons: [ 50,50 ]
+
+  - tam:
+        model_type: tam
+        model_args:
+            map: ../../resources/TamariskMaps/2.txt
+        horizons: [ 50,50 ]
+
+  - wf:
+        model_type: wf
+        model_args:
+            map: ../../resources/WildfireSetups/1.txt
+        horizons: [ 50,50 ]
+
+  - mab:
+      model_type: mab
+      model_args:
+        means: 10.0;9.0
+        stds: 1.0;10.0
+        repeats: 10
+
+pairings:
+
+  - pair:
+      - agents: [aupo_uct_root, aupo_smart_sampling]
+      - models: [aa,gol,sa,tam,wf]
+
+  - pair:
+      - agents: [aupo_all, mcts]
+      - models: [aa,gol,sa,tam,wf,mab]
+
+
