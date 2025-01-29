@@ -219,7 +219,7 @@ inline Agent* getAgent(const std::string& agent_type, const std::vector<std::str
 int main(const int argc, char **argv) {
 
 
-    argparse::ArgumentParser program("BenchmarkGames");
+    argparse::ArgumentParser program("Aupo");
 
     program.add_argument("-s", "--seed")
         .help("Seed for the random number generator")
