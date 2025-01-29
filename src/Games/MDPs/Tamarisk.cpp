@@ -193,7 +193,7 @@ std::pair<std::vector<double>, std::pair<int, double>> Model::applyAction_(
         if(action < num_reaches)
             eradicate_action[action] = true;
         else if(action != 2*num_reaches)
-            restore_action[action + num_reaches] = true;
+            restore_action[action - num_reaches] = true;
     }
 
     // Track rewards, sample prob and sample num

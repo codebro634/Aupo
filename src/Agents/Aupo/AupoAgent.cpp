@@ -244,8 +244,7 @@ int AupoAgent::selectAction(AupoNode* node, std::mt19937& rng, AupoSearchStats& 
     //get exploration factor (global std)
     double exploration_param = node->getDepth() >= exploration_parameter.size() ? exploration_parameter.back() : exploration_parameter[node->getDepth()];
     const double q_var = std::max(0.0,search_stats.total_squared_v / (double)search_stats.global_num_vs - (search_stats.total_v / (double)search_stats.global_num_vs) *  (search_stats.total_v / (double)search_stats.global_num_vs));
-    double exp_factor = sqrt(q_var) * (exploration_param == -1? 1.0 :exploration_param);
-
+    double exp_factor = exploration_param == -1? 1.0 : (sqrt(q_var) * exploration_param);
 
     //determine abstract action with UCT
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
