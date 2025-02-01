@@ -93,6 +93,18 @@ models:
         stds: 1.0;10.0
         repeats: 10
 
+  - navigation:
+      model_type: navigation
+      model_args:
+        map: ../../resources/NavigationMaps/3.txt
+      horizons: [ 50,50 ]
+
+  - sw:
+      model_type: sw
+      model_args:
+        size: 15
+      horizons: [ 50,50 ]
+
 pairings:
 
   - pair:
@@ -101,6 +113,6 @@ pairings:
 
   - pair:
       - agents: [aupo_all, mcts]
-      - models: [aa,gol,sa,tam,wf,mab]
+      - models: [aa,gol,sa,tam,wf, mab, sw, navigation]
 
 
