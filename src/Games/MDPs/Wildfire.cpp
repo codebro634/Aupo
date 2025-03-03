@@ -231,7 +231,7 @@ std::pair<std::vector<double>,std::pair<int,double>> Model::applyAction_(ABS::Ga
 
             else if(!state->out_of_fuel[x][y] && !state->burning[x][y]) {
                 int burning_neighbors = num_burning_neighbors(x,y,width,height,state->burning,cut_connections);
-                if(!is_target[encode_cell(x,y,width)]) {
+                if(!is_target[encode_cell(x,y,width)] || burning_neighbors >= 1) {
                     double ignition_prob = 1.0 / ( 1.0 + exp(4.5 - burning_neighbors) );
                     if(dist(rng) < ignition_prob) { //spontaneous ignition
                         new_burning = true;
