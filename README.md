@@ -1,8 +1,8 @@
-# Aupo: Abstracted until proven otherwise
+# AUPO - Abstracted until proven otherwise: A reward distribution based abstraction algorithm
 
 ## Purpose
 
-This is the repository accompanying the paper "Aupo: Abstracted until proven otherwise" which
+This is the repository accompanying the paper "AUPO - Abstracted until proven otherwise: A reward distribution based abstraction algorithm" which
 contains the code to reproduce the experiments and the results of the paper.
 
 ## Abstract
