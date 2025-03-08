@@ -52,7 +52,7 @@ To compile with [CMake](https://cmake.org/) you need to have CMake installed on 
     ```
    *This will invoke the underlying build system (e.g., `make` or `ninja`) to compile the source code.*
 
-If no errors occur, the compiled binary `DynamicExpMcts` should now be available in the `build` directory.
+If no errors occur, the compiled binary `Aupo` should now be available in the `build` directory.
 
 ## Usage
 
