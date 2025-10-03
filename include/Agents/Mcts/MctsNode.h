@@ -6,7 +6,6 @@
 #include <random>
 #include <unordered_set>
 #include <vector>
-
 #include "../../Arena.h"
 
 namespace Mcts
@@ -41,18 +40,18 @@ namespace Mcts
             std::mt19937& rng
         );
 
-        int popUntriedAction();
+        int popUntriedAction(double vinit);
 
         void addVisit();
         void addActionVisit(int action);
-        void addActionValues(int action, const std::vector<double>& values);
+        void addActionValues(int action, const std::vector<double>& values, bool max_backup);
 
         [[nodiscard]] std::vector<double>* getActionValues(int action);
 
         [[nodiscard]] ABS::Model* getModel() const;
         [[nodiscard]] ABS::Gamestate* getStateCopy() const;
         [[nodiscard]] const ABS::Gamestate* getState() const;
-        [[nodiscard]] std::map<int, std::map<int, MctsNode*>>* getChildren();
+        [[nodiscard]] std::map<int, gsToNodeMap<MctsNode*>>* getChildren();
         [[nodiscard]] int getPlayer() const;
 
 
@@ -71,7 +70,7 @@ namespace Mcts
         // Model related stats
         ABS::Model* model;
         ABS::Gamestate* state;
-        std::map<int, std::map<int, MctsNode*>> children;
+        std::map<int, gsToNodeMap<MctsNode*>> children;
 
         // MCTS stats
         int depth;

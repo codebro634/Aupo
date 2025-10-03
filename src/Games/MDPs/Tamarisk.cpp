@@ -7,9 +7,37 @@
 #include <iostream>
 #include <fstream>
 
-//implementation from PYRDDL https://github.com/pyrddlgym-project/rddlrepository/blob/main/rddlrepository/archive/competitions/IPPC2014/Tamarisk/MDP/domain.rddl
-
 using namespace TAM;
+
+inline bool getPlant(int plant_at, int reach, int slot, int max_slots_per_reach) {
+    return (plant_at & (1 << (reach * max_slots_per_reach + slot))) != 0;
+}
+
+std::vector<int> Model::obsShape() const {
+    return {num_slots * 2};
+}
+
+void Model::getObs(ABS::Gamestate* uncasted_state, int* obs){
+    auto state = dynamic_cast<Gamestate*>(uncasted_state);
+    int slot_num = 0;
+    for (int r = 0; r < num_reaches; ++r) {
+        for (int s = 0; s < slots_at_reach[r]; ++s) {
+            obs[slot_num] = getPlant(state->tamarisk_at, r, s, state->max_slots_per_reach);
+            obs[slot_num + num_slots] = getPlant(state->native_at, r, s, state->max_slots_per_reach);
+            slot_num++;
+        }
+    }
+}
+
+[[nodiscard]] std::vector<int> Model::actionShape() const {
+    assert (!COMBINATORIAL_ACTION_SPACE);
+    return {num_reaches * 2 + 1};
+}
+
+int Model::encodeAction(int* decoded_action) {
+    assert (!COMBINATORIAL_ACTION_SPACE);
+    return decoded_action[0];
+}
 
 inline void placePlant(int& plant_at, int reach, int slot, int max_slots_per_reach) {
     plant_at |= 1 << (reach * max_slots_per_reach + slot);
@@ -18,11 +46,6 @@ inline void placePlant(int& plant_at, int reach, int slot, int max_slots_per_rea
 inline void removePlant(int& plant_at, int reach, int slot, int max_slots_per_reach) {
     plant_at &= ~(1 << (reach * max_slots_per_reach + slot));
 }
-
-inline bool getPlant(int plant_at, int reach, int slot, int max_slots_per_reach) {
-    return (plant_at & (1 << (reach * max_slots_per_reach + slot))) != 0;
-}
-
 
 void Model::init_model_from_file(const std::string& filePath)
 {
@@ -90,9 +113,9 @@ Model::Model(const std::string& filePath)
 
 std::string Gamestate::toString() const {
     std::ostringstream oss;
-    oss << "Turn: " << turn << ", Num Moves: " << num_moves << ", Terminal: " << terminal << "\n";
+    oss << ABS::Gamestate::toString() << "\n";
     oss << "Tamarisk at:\n";
-    for (int r = 0; r < num_tamarisk_reach.size(); ++r) {
+    for (size_t r = 0; r < num_tamarisk_reach.size(); ++r) {
         oss << "Reach " << r << ": ";
         for (int i = 0; i < slots_at_reach[r]; ++i) {
             oss << getPlant(tamarisk_at,r,i,max_slots_per_reach) << " ";
@@ -100,7 +123,7 @@ std::string Gamestate::toString() const {
         oss << "\n";
     }
     oss << "Native at:\n";
-    for (int r = 0; r < num_tamarisk_reach.size(); ++r) {
+    for (size_t r = 0; r < num_tamarisk_reach.size(); ++r) {
         oss << "Reach " << r << ": ";
         for (int i = 0; i < slots_at_reach[r]; ++i) {
             oss << getPlant(native_at,r,i,max_slots_per_reach) << " ";
@@ -170,8 +193,9 @@ double Model::getDistance(const ABS::Gamestate* a, const ABS::Gamestate* b) cons
     return __builtin_popcount( state_a->tamarisk_at ^ state_b->tamarisk_at) + __builtin_popcount( state_a->native_at ^ state_b->native_at);
 }
 
-std::pair<std::vector<double>, std::pair<int, double>> Model::applyAction_(
-    ABS::Gamestate* uncasted_state, int action, std::mt19937& rng) {
+std::pair<std::vector<double>, double> Model::applyAction_(
+    ABS::Gamestate* uncasted_state, int action, std::mt19937& rng, std::vector<std::pair<int,int>>* decision_outcomes) {
+    size_t decision_point = 0;
 
     // Cast state and save old state
     auto* state = dynamic_cast<Gamestate*>(uncasted_state);
@@ -192,25 +216,21 @@ std::pair<std::vector<double>, std::pair<int, double>> Model::applyAction_(
     }else {
         if(action < num_reaches)
             eradicate_action[action] = true;
-        else if(action != 2*num_reaches)
-            restore_action[action - num_reaches] = true;
+        else if(action != 2*num_reaches) {
+            restore_action.at(action - num_reaches) = true;
+        }
     }
 
     // Track rewards, sample prob and sample num
     double reward = 0.0;
     double sample_prob = 1.0;
-    int sample_num = 0;
-    int sample_pow = 1;
-
 
     //Get reward
-    for (int r = 0; r < num_reaches; ++r)
-    {
+    for (int r = 0; r < num_reaches; ++r){
         reward -= COST_PER_INVADED_REACH * (state->num_tamarisk_reach[r] > 0? 1:0);
         reward -= RESTORATION_COST * restore_action[r];
         reward -= ERADICATION_COST * eradicate_action[r];
-        for(int s = 0; s < slots_at_reach[r]; s++)
-        {
+        for(int s = 0; s < slots_at_reach[r]; s++){
             reward -= COST_PER_TREE * getPlant(state->tamarisk_at,r,s,state->max_slots_per_reach);
             reward -= COST_PER_EMPTY_SLOT * (!getPlant(state->tamarisk_at,r,s,state->max_slots_per_reach) && !getPlant(state->native_at,r,s,state->max_slots_per_reach));
             reward -= RESTORATION_COST_FOR_EMPTY_SLOT * (!getPlant(state->tamarisk_at,r,s,state->max_slots_per_reach) && !getPlant(state->native_at,r,s,state->max_slots_per_reach) && restore_action[r]);
@@ -225,33 +245,27 @@ std::pair<std::vector<double>, std::pair<int, double>> Model::applyAction_(
             bool set_tamarisk;
             //Update tamarisk
             if(getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach) && getPlant(old_state.native_at,r,s,old_state.max_slots_per_reach)){
-                bool b = dist(rng) < COMPETITION_WIN_RATE_TAMARISK;
+                bool b = decision_outcomes == nullptr ||COMPETITION_WIN_RATE_TAMARISK == 1 || COMPETITION_WIN_RATE_TAMARISK == 0? dist(rng) < COMPETITION_WIN_RATE_TAMARISK : getDecisionPoint(decision_point,0,1,decision_outcomes) == 0;
                 if(b){
                     sample_prob *= COMPETITION_WIN_RATE_TAMARISK;
-                    sample_num += sample_pow;
                 }else
                     sample_prob *= 1-COMPETITION_WIN_RATE_TAMARISK;
-                sample_pow *= 2;
                 set_tamarisk = b;
             }else if(!getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach) && eradicate_action[r]){
                 set_tamarisk = false;
             }else if(getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach) && eradicate_action[r]){
-                bool b = dist(rng) >= ERADICATION_RATE;
+                bool b = decision_outcomes == nullptr? dist(rng) >= ERADICATION_RATE : getDecisionPoint(decision_point,0,1,decision_outcomes) == 1;
                 if(b){
                     sample_prob *= 1-ERADICATION_RATE;
-                    sample_num += sample_pow;
                 }else
                     sample_prob *= ERADICATION_RATE;
-                sample_pow *= 2;
                 set_tamarisk = b;
             } else if(getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach)){
-                bool b = dist(rng) >= DEATH_RATE_TAMARISK;
+                bool b = decision_outcomes == nullptr || DEATH_RATE_TAMARISK == 0 || DEATH_RATE_TAMARISK == 1? dist(rng) >= DEATH_RATE_TAMARISK : getDecisionPoint(decision_point,0,1,decision_outcomes) == 1;
                 if(b){
                     sample_prob *= 1-DEATH_RATE_TAMARISK;
-                    sample_num += sample_pow;
                 }else
                     sample_prob *= DEATH_RATE_TAMARISK;
-                sample_pow *= 2;
                 set_tamarisk = b;
             } else if(!getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach) and !getPlant(old_state.native_at,r,s,old_state.max_slots_per_reach))
             {
@@ -261,13 +275,11 @@ std::pair<std::vector<double>, std::pair<int, double>> Model::applyAction_(
                 double p = EXOGENOUS_PROD_RATE_TAMARISK + (1 - EXOGENOUS_PROD_RATE_TAMARISK) * (1 -
                         p_not_spread_downstream * p_not_spread_same_reach * p_not_spread_upstream);
 
-                bool b = dist(rng) < p;
+                bool b = decision_outcomes == nullptr || p == 0 || p == 1 ? dist(rng) < p : getDecisionPoint(decision_point,0,1,decision_outcomes) == 0;
                 if(b){
                     sample_prob *= p;
-                    sample_num += sample_pow;
                 }else
                     sample_prob *= 1-p;
-                sample_pow *= 2;
                 set_tamarisk = b;
             }else
             {
@@ -285,13 +297,11 @@ std::pair<std::vector<double>, std::pair<int, double>> Model::applyAction_(
             bool set_native;
             if(getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach) && getPlant(old_state.native_at,r,s,old_state.max_slots_per_reach))
             {
-                bool b = dist(rng) < COMPETITION_WIN_RATE_NATIVE;
+                bool b = decision_outcomes == nullptr || COMPETITION_WIN_RATE_NATIVE == 0 || COMPETITION_WIN_RATE_NATIVE == 1? dist(rng) < COMPETITION_WIN_RATE_NATIVE : getDecisionPoint(decision_point,0,1,decision_outcomes) == 0;
                 if(b){
                     sample_prob *= COMPETITION_WIN_RATE_NATIVE;
-                    sample_num += sample_pow;
                 }else
                     sample_prob *= 1-COMPETITION_WIN_RATE_NATIVE;
-                sample_pow *= 2;
                 set_native = b;
             }else if(!getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach) && getPlant(old_state.native_at,r,s,old_state.max_slots_per_reach) && restore_action[r])
             {
@@ -299,33 +309,27 @@ std::pair<std::vector<double>, std::pair<int, double>> Model::applyAction_(
             }
             else if(!getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach) && !getPlant(old_state.native_at,r,s,old_state.max_slots_per_reach) && restore_action[r])
             {
-                bool b = dist(rng) < RESTORATION_RATE;
+                bool b = decision_outcomes == nullptr || (RESTORATION_RATE == 0) || RESTORATION_RATE == 1? dist(rng) < RESTORATION_RATE : getDecisionPoint(decision_point,0,1,decision_outcomes) == 0;
                 if(b){
                     sample_prob *= RESTORATION_RATE;
-                    sample_num += sample_pow;
                 }else
                     sample_prob *= 1-RESTORATION_RATE;
-                sample_pow *= 2;
                 set_native = b;
             } else if(getPlant(old_state.native_at,r,s,old_state.max_slots_per_reach))
             {
-                bool b = dist(rng) >= DEATH_RATE_NATIVE;
+                bool b = decision_outcomes == nullptr || (DEATH_RATE_NATIVE == 0 || DEATH_RATE_NATIVE == 1)? dist(rng) >= DEATH_RATE_NATIVE : getDecisionPoint(decision_point,0,1,decision_outcomes) == 1;
                 if(b){
                     sample_prob *= 1-DEATH_RATE_NATIVE;
-                    sample_num += sample_pow;
                 }else
                     sample_prob *= DEATH_RATE_NATIVE;
-                sample_pow *= 2;
                 set_native = b;
             } else if(!getPlant(old_state.tamarisk_at,r,s,old_state.max_slots_per_reach) && !getPlant(old_state.native_at,r,s,old_state.max_slots_per_reach))
             {
-                bool b = dist(rng) < EXOGENOUS_PROD_RATE_NATIVE;
+                bool b = decision_outcomes == nullptr || (EXOGENOUS_PROD_RATE_NATIVE == 0 || EXOGENOUS_PROD_RATE_NATIVE == 1)? dist(rng) < EXOGENOUS_PROD_RATE_NATIVE : getDecisionPoint(decision_point,0,1,decision_outcomes) == 0;
                 if(b){
                     sample_prob *= EXOGENOUS_PROD_RATE_NATIVE;
-                    sample_num += sample_pow;
                 }else
                     sample_prob *= 1-EXOGENOUS_PROD_RATE_NATIVE;
-                sample_pow *= 2;
                 set_native = b;
             }else
             {
@@ -340,5 +344,5 @@ std::pair<std::vector<double>, std::pair<int, double>> Model::applyAction_(
 
     }
 
-    return {{reward}, {sample_num, sample_prob}, };
+    return {{reward}, sample_prob};
 }

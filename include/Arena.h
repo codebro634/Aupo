@@ -10,24 +10,28 @@
 
 #include "Games/Gamestate.h"
 #include "Agents/Agent.h"
+#include "Utils/ValueIteration.h"
 
 #endif //ARENA_H
 
-static constexpr int DEFAULT_EXECUTION_HORIZON = 50;
-static constexpr int DEFAULT_PLANNING_HORIZON = 50;
-
-enum OutputMode
-{
-    NORMAL,
+enum OutputMode{
+    MUTED,
     VERBOSE,
-    CSV
+    CSV,
+    CSV_OMIT_TIMES
 };
 
-std::vector<double> playGames(ABS::Model& model,
+std::vector<std::vector<double>> playGames(ABS::Model* model,
     int num_maps,
     std::vector<Agent*> agents,
     std::mt19937& rng,
     OutputMode output_mode,
-    std::pair<int,int> horizons = {DEFAULT_EXECUTION_HORIZON,DEFAULT_PLANNING_HORIZON},
+    std::pair<int,int> horizons,
     bool planning_beyond_execution_horizon = false,
-    bool random_init_state =true);
+    bool random_init_state =true,
+    double required_conf_range = std::numeric_limits<double>::max(),
+    std::unordered_map<std::pair<FINITEH::Gamestate*,int>, double, VALUE_IT::QMapHash, VALUE_IT::QMapCompare>* Q_map = nullptr,
+    const std::string& rng_save_path = "",
+    int episode_num_offset = 0);
+
+//Return is of dimension [2][num_player]. For each player, the first element is the total reward, the second element is the average decision time in milliseconds.

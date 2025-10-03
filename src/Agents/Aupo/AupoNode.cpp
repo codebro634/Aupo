@@ -82,7 +82,7 @@ std::vector<int>* AupoNode::getTriedActions()
     return &tried_actions;
 }
 
-std::map<int, std::map<int, AupoNode*>>* AupoNode::getChildren()
+std::map<int, gsToNodeMap<AupoNode*>>* AupoNode::getChildren()
 {
     return &children;
 }

@@ -9,48 +9,49 @@ using namespace std;
 
 using namespace GOL;
 
+inline bool getCell(int& board, int x, int y, int width){
+    return (board & (1 << (x * width + y))) != 0;
+}
+
+std::vector<int> Model::obsShape() const {
+    return {1, map_width, map_height};
+}
+
+void Model::getObs(ABS::Gamestate* uncasted_state, int* obs) {
+    for (int i = 0; i < map_width; ++i) {
+        for (int j = 0; j < map_height; ++j) {
+            obs[i * map_height + j] = getCell(dynamic_cast<GOL::Gamestate*>(uncasted_state)->board, i, j, map_width) ? 1 : 0;
+        }
+    }
+}
+
+[[nodiscard]] std::vector<int> Model::actionShape() const {
+    return {1+map_height*map_width};
+}
+
+int Model::encodeAction(int* decoded_action) {
+    return decoded_action[0]-1;
+}
+
+
 [[nodiscard]] std::string Gamestate::toString() const {
     return "((" + std::to_string(board) + ")" + "," + ABS::Gamestate::toString() + ")";
 }
 
 ABS::Gamestate* Model::deserialize(std::string &ostring) const {
     auto* state = new Gamestate();
-    int board, turn, num_moves, terminal;
-    sscanf(ostring.c_str(), "((%d),(%d,%d,%d))", &board, &num_moves, &turn, &terminal);
+    int board, turn,  terminal;
+    sscanf(ostring.c_str(), "((%d),(%d,%d))", &board, &turn, &terminal);
     state->board = board;
-    state->num_moves = num_moves;
     state->turn = turn;
     state->terminal = terminal;
     return state;
 }
 
-Model::Model() {  //deterministic
-    // noise_map ={
-    //     {0.086708486, 0.07763067, 0.09053348},
-    //     {0.06538754, 0.09307135, 0.0581377},
-    //     {0.061724667, 0.09901054, 0.06759059}
-    // };
-    noise_map = {
-        {0.07, 0.07, 0.07},
-        {0.07, 0.07, 0.07},
-        {0.07, 0.07, 0.07}
-    };
-    // noise_map = {
-    //     {0,0,0},
-    //     {0,0,0},
-    //     {0,0,0}
-    // };
-    map_width = 3;
-    loaded_map_hash = 0;
-    loaded_map = {};
-}
-
-Model::Model(const std::string& fileName)
-{
+Model::Model(const std::string& fileName, ActionMode action_space){
     std::ifstream file(fileName);
 
-    if (!file.is_open())
-    {
+    if (!file.is_open()){
         std::cerr << "Could not open file " << fileName << std::endl;
         exit(1);
     }
@@ -60,14 +61,12 @@ Model::Model(const std::string& fileName)
     std::vector<std::vector<float>> temp_noise_map;
 
     // Read the first matrix of booleans (0 or 1)
-    while (std::getline(file, line) && !(line.empty() || line == "\r"))
-    {
+    while (std::getline(file, line) && !(line.empty() || line == "\r")){
         std::vector<bool> row;
         std::istringstream iss(line);
         std::string value;
 
-        while (std::getline(iss, value, ' '))
-        {
+        while (std::getline(iss, value, ' ')){
             row.push_back(value == "1" || value == "1\r"); // Convert "1" to true, "0" to false
         }
         temp_board.push_back(row);
@@ -84,8 +83,7 @@ Model::Model(const std::string& fileName)
         std::istringstream iss(line);
         std::string value;
 
-        while (std::getline(iss, value, ' '))
-        {
+        while (std::getline(iss, value, ' ')){
             row.push_back(std::stof(value));  // Convert string to float
         }
         temp_noise_map.push_back(row);
@@ -94,51 +92,41 @@ Model::Model(const std::string& fileName)
     // Assign temp vectors to the member variables
     loaded_map = temp_board;
     map_width = temp_board.size();
+    map_height = temp_board[0].size();
     loaded_map_hash = 0;
-    for (int i = 0; i < temp_board.size(); ++i) {
-        for (int j = 0; j < temp_board.size(); ++j) {
-            loaded_map_hash += (1 << (i * temp_board.size() + j)) * temp_board[i][j];
+    for (int i = 0; i < map_width; ++i) {
+        for (int j = 0; j <map_height; ++j) {
+            loaded_map_hash += (1 << (i * map_height + j)) * temp_board[i][j];
         }
     }
     noise_map = temp_noise_map;
+    this->action_mode = action_space;
 
-    assert (map_width <= 5); // Limit the size of the board to 5x5 as we save it in a 32-bit integer. If one wants to increase this limit, modify == operator
+    assert (map_width * map_height <= 32); // Limit the size of the board to 5x5 as we save it in a 32-bit integer. If one wants to increase this limit, modify == operator
 }
 
-bool Gamestate::operator==(const ABS::Gamestate& other) const
-{
+bool Gamestate::operator==(const ABS::Gamestate& other) const{
     return board ==  dynamic_cast<const Gamestate*>(&other)->board;
 }
 
-size_t Gamestate::hash() const
-{
+size_t Gamestate::hash() const{
     return board;
 }
 
-inline bool getCell(int& board, int x, int y, int width)
-{
-    return (board & (1 << (x * width + y))) != 0;
-}
-
-inline void setCell(int& board, int x, int y, int width, bool value)
-{
+inline void setCell(int& board, int x, int y, int width, bool value){
     if (value)
-    {
         board |= (1 << (x * width + y));
-    }
     else
-    {
         board &= ~(1 << (x * width + y));
-    }
 }
 
 void Model::printState(ABS::Gamestate* state) {
     auto* golState = dynamic_cast<GOL::Gamestate*>(state);
     if (!golState) return;
 
-    for (int i = 0; i < noise_map.size(); ++i) {
-        for (int j = 0; j < noise_map.size(); ++j) {
-            std::cout << (getCell(golState->board,i,j,map_width) ? 'x' : '.') << " ";
+    for (size_t i = 0; i < noise_map.size(); ++i) {
+        for (size_t j = 0; j < noise_map[0].size(); ++j) {
+            std::cout << (getCell(golState->board,i,j,map_height) ? 'x' : '.') << " ";
         }
         std::cout << std::endl;
     }
@@ -154,7 +142,7 @@ double Model::getDistance(const ABS::Gamestate* a, const ABS::Gamestate* b) cons
 ABS::Gamestate* Model::getInitialState(int num) {
         std::vector<int> state_codes = {
             // 197,
-            453,
+            30169386,
             //281 //manually chosen state numbers in which aupo gets neither 100% nor 0% accuraccy and the best contenders can be grouped
         };
         auto state_string = "(("+std::to_string(state_codes[num % state_codes.size()]) + "),(0,0,0))";
@@ -174,7 +162,7 @@ ABS::Gamestate* Model::getInitialState(std::mt19937& rng)
         state->board = 0;
         std::uniform_int_distribution<int> dist(0, 1);
          for (int i = 0; i < map_width; ++i) {
-             for (int j = 0; j < map_width; ++j) {
+             for (int j = 0; j < map_height; ++j) {
                  setCell(state->board,i,j,map_width,dist(rng));
              }
          }
@@ -198,8 +186,11 @@ ABS::Gamestate* Model::copyState(ABS::Gamestate* uncasted_state) {
 std::vector<int> Model::getActions_(ABS::Gamestate* uncasted_state)  {
     auto state = dynamic_cast<Gamestate*>(uncasted_state);
     std::vector<int> actions;
-    for (int i = 0; i < noise_map.size() * noise_map.size(); ++i) {
-        if (getCell(state->board, i / noise_map.size(), i % noise_map.size(), map_width))  // If cell is alive
+    for (size_t i = 0; i < noise_map.size() * noise_map[0].size(); ++i) {
+        bool legal_action = (action_mode == ActionMode::SAVE_ONLY && getCell(state->board, i / noise_map[0].size(), i % noise_map[0].size(), map_height)) ||
+            (action_mode == ActionMode::REVIVE_ONLY && !getCell(state->board, i / noise_map[0].size(), i % noise_map[0].size(), map_height)) ||
+            action_mode == ActionMode::ALL;
+        if (legal_action)  // If cell is alive
             actions.push_back(i);
     }
     if(actions.empty())
@@ -224,12 +215,13 @@ int countAliveNeighbors(int& board, int board_size, int x, int y) {
     return count;
 }
 
-std::pair<std::vector<double>,std::pair<int,double>> Model::applyAction_(ABS::Gamestate* uncasted_state, int action, std::mt19937& rng) {
+std::pair<std::vector<double>,double> Model::applyAction_(ABS::Gamestate* uncasted_state, int action, std::mt19937& rng, std::vector<std::pair<int,int>>* decision_outcomes) {
             auto* state = dynamic_cast<GOL::Gamestate*>(uncasted_state);
+            size_t decision_point = 0;
 
             // Map the action (index) to a grid coordinate
-            int row = action / noise_map.size();
-            int col = action % noise_map.size();
+            int row = action / noise_map[0].size();
+            int col = action % noise_map[0].size();
 
             if (action == -1)
                 row = -1; //makes sure the action has no effect
@@ -240,40 +232,38 @@ std::pair<std::vector<double>,std::pair<int,double>> Model::applyAction_(ABS::Ga
             // Apply standard Game of Life rules with stochastic override
             int num_living_cells = 0;
             double p = 1;
-            int sample_num=0, hash_pow = 1;
-            for (int i = 0; i < noise_map.size(); ++i) {
-                for (int j = 0; j < noise_map.size(); ++j) {
-                    int alive_neighbors = countAliveNeighbors(old_board, map_width, i, j);
+            for (size_t i = 0; i < noise_map.size(); ++i) {
+                for (size_t j = 0; j < noise_map[0].size(); ++j) {
+                    int alive_neighbors = countAliveNeighbors(old_board, map_height, i, j);
 
                     // Standard Game of Life rules
-                    bool next_alive = getCell(old_board,i,j,map_width);
+                    bool next_alive = getCell(old_board,i,j,map_height);
                     if (next_alive)
                         num_living_cells++;
 
-                    if (getCell(old_board,i,j,map_width)) {
-                        if ( (i != row || j != col) && (alive_neighbors < 2 || alive_neighbors > 3)) {
+                    if (getCell(old_board,i,j,map_height)) {
+                        if ( (static_cast<int>(i) != row || static_cast<int>(j) != col) && (alive_neighbors < 2 || alive_neighbors > 3)) {
                             next_alive = false;  // Cell dies
                         }
                     } else {
-                        if (alive_neighbors == 3) {
+                        if (alive_neighbors == 3 || (static_cast<int>(i) == row && static_cast<int>(j) == col)) {
                             next_alive = true;  // Cell becomes alive
                         }
                     }
 
                     // Apply stochastic override
                     std::uniform_real_distribution<double> dist(0.0, 1.0);
-                    if (dist(rng) < noise_map[i][j]) {
+                    size_t outcome = decision_outcomes == nullptr || noise_map[i][j] == 0 || noise_map[i][j] == 1? (dist(rng) < noise_map[i][j]) : getDecisionPoint(decision_point, 0, 1, decision_outcomes);
+                    if (outcome == 1) {
                         next_alive = !next_alive;  // Override the transition
                         p *= noise_map[i][j];
-                        sample_num += hash_pow;
                     }else {
                         p *= 1 - noise_map[i][j];
                     }
-                    hash_pow *= 2;
 
                     setCell(state->board,i,j,map_width,next_alive);
                 }
             }
 
-            return {{(double)num_living_cells}, {sample_num, p}};
+            return {{(double)num_living_cells}, p};
         }

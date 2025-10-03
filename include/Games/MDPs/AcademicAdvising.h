@@ -16,7 +16,7 @@ namespace AA
     const static int COURSE_COST = 1;
     const static int REDO_COST = 2;
     const static int INCOMPLETE_COST = 5;
-    const static int PASS_REWARD = 5; //only neede for dense reward setting
+    const static int PASS_REWARD = 5; //only needed for dense reward setting
 
     const static std::vector<std::vector<int>> DEFAULT_PREREQS = {
         {},
@@ -50,25 +50,33 @@ namespace AA
     {
     public:
         ~Model() override = default;
-        explicit Model(const std::string& fileName, bool dense_rewards);
+        explicit Model(const std::string& fileName, bool dense_rewards, bool idle_action);
         void printState(ABS::Gamestate* state) override;
         ABS::Gamestate* getInitialState(std::mt19937& rng) override;
         ABS::Gamestate* getInitialState(int num) override;
         ABS::Gamestate* copyState(ABS::Gamestate* uncasted_state) override;
         int getNumPlayers() override;
+        bool hasTransitionProbs() override {return true;}
 
-        [[nodiscard]] double getMinV(int steps) const override {return -(INCOMPLETE_COST + std::max(REDO_COST,COURSE_COST))*(getHorizonLength() - steps);}
+        [[nodiscard]] double getMinV(int steps) const override {return -(INCOMPLETE_COST + std::max(REDO_COST,COURSE_COST))*steps;}
         [[nodiscard]] double getMaxV(int steps) const override {return -INCOMPLETE_COST + std::max(REDO_COST,COURSE_COST);}
 
         [[nodiscard]] ABS::Gamestate* deserialize(std::string &ostring) const override;
 
+        [[nodiscard]] std::vector<int> obsShape() const override;
+        void getObs(ABS::Gamestate* uncasted_state, int* obs);
+        [[nodiscard]] std::vector<int> actionShape() const override;
+        [[nodiscard]] int encodeAction(int* decoded_action) override;
+
     private:
         bool dense_rewards;
+        bool simultaneous_actions;
+        bool idle_action;
 
         std::vector<int> actions;
         std::vector<std::vector<int>> prereqs;
         std::vector<int> req_courses;
-        std::pair<std::vector<double>,std::pair<int,double>> applyAction_(ABS::Gamestate* uncasted_state, int action, std::mt19937& rng) override;
+        std::pair<std::vector<double>,double> applyAction_(ABS::Gamestate* uncasted_state, int action, std::mt19937& rng, std::vector<std::pair<int,int>>* decision_outcomes) override;
         std::vector<int> getActions_(ABS::Gamestate* uncasted_state) override;
         [[nodiscard]] double getDistance(const ABS::Gamestate* a, const ABS::Gamestate* b) const override;
 

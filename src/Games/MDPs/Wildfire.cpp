@@ -7,12 +7,37 @@
 using namespace std;
 using namespace WF;
 
-inline std::pair<int,int> decode_cell(int cell, int width) {
-    return {cell % width, cell / width};
-}
-
 inline int encode_cell(int x, int y, int width) {
     return x + y*width;
+}
+
+std::vector<int> Model::obsShape() const {
+    return {width*height*3};
+}
+
+void Model::getObs(ABS::Gamestate* uncasted_state, int* obs) {
+    auto state = dynamic_cast<Gamestate*>(uncasted_state);
+    int msize = width*height;
+    for(int x = 0; x < width; x++) {
+        for(int y = 0; y < height; y++) {
+            int pos = encode_cell(x,y,width);
+            obs[0*msize + pos] = state->burning[x][y]? 1 : 0;
+            obs[1*msize + pos] = state->out_of_fuel[x][y]? 1 : 0;
+            obs[2*msize + pos] = is_target[pos]? 1 : 0;
+        }
+    }
+}
+
+[[nodiscard]] std::vector<int> Model::actionShape() const {
+    return {width*height*2+1};
+}
+
+int Model::encodeAction(int* decoded_action) {
+    return decoded_action[0];
+}
+
+inline std::pair<int,int> decode_cell(int cell, int width) {
+    return {cell % width, cell / width};
 }
 
 Model::Model(const std::string& fileName)
@@ -191,8 +216,9 @@ double Model::getDistance(const ABS::Gamestate* a, const ABS::Gamestate* b) cons
 }
 
 
-std::pair<std::vector<double>,std::pair<int,double>> Model::applyAction_(ABS::Gamestate* uncasted_state, int action, std::mt19937& rng) {
+std::pair<std::vector<double>,double> Model::applyAction_(ABS::Gamestate* uncasted_state, int action, std::mt19937& rng, std::vector<std::pair<int,int>>* decision_outcomes) {
     auto* state = dynamic_cast<WF::Gamestate*>(uncasted_state);
+    size_t decision_point = 0;
 
     //parse action
     int atype = action >= width*height? (action == width*height*2? 2 : 1 ) : 0; //0 = cutout, 1 = putout, 2 = noop
@@ -203,8 +229,6 @@ std::pair<std::vector<double>,std::pair<int,double>> Model::applyAction_(ABS::Ga
     int ay = decoded_action.second;
 
     double p = 1;
-    int pow = 1;
-    int successor = 0;
     std::uniform_real_distribution<double> dist(0, 1);
 
     std::vector<std::pair<int,bool>> burn_updates = {};
@@ -233,14 +257,12 @@ std::pair<std::vector<double>,std::pair<int,double>> Model::applyAction_(ABS::Ga
                 int burning_neighbors = num_burning_neighbors(x,y,width,height,state->burning,cut_connections);
                 if(!is_target[encode_cell(x,y,width)] || burning_neighbors >= 1) {
                     double ignition_prob = 1.0 / ( 1.0 + exp(4.5 - burning_neighbors) );
-                    if(dist(rng) < ignition_prob) { //spontaneous ignition
+                    if((decision_outcomes == nullptr && dist(rng) < ignition_prob) || (decision_outcomes != nullptr && (ignition_prob == 1 || (ignition_prob != 0 && getDecisionPoint(decision_point,0,1,decision_outcomes) == 0)))) { //spontaneous ignition
                         new_burning = true;
                         p*=ignition_prob;
                     }else {
                         p*= 1 - ignition_prob;
-                        successor += pow;
                     }
-                    pow*=2;
                 }
             }
 
@@ -295,5 +317,5 @@ std::pair<std::vector<double>,std::pair<int,double>> Model::applyAction_(ABS::Ga
     reward -= targets_burning * COST_TARGET_BURN;
     reward -= nontargets_burning * COST_NONTARGET_BURN;
 
-    return {{reward}, {successor, p}};
+    return {{reward}, p};
 }

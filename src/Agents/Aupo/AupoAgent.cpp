@@ -5,19 +5,28 @@
 #include <chrono>
 #include <ranges>
 #include "../../../include/Utils/Distributions.h"
+#include <iostream>
+#include <iomanip>
 
 using namespace AUPO;
 
 AupoAgent::AupoAgent(const AupoArgs& args) :
-    exploration_parameter(args.exploration_parameter),
-    discount(args.discount), budget(args.budget),
     rollout_length(args.rollout_length),
+    exploration_parameter(args.exploration_parameter),
+    discount(args.discount),
+    budget(args.budget),
     distribution_layers(args.distribution_layers),
     use_rollout_distribution(args.use_rollout_distribution),
     dag(args.dag),
     min_samples(args.min_samples),
     smart_uniform_sampling(args.smart_uniform_sampling),
-    smart_sampling_q(args.smart_sampling_q)
+    smart_sampling_q(args.smart_sampling_q),
+    random_abs_prob(args.random_abs_prob),
+    just_mcts(args.just_mcts),
+    distr_agent(args.distr_agent),
+    earthmover_threshold(args.earthmover_threshold),
+    ks_threshold(args.ks_threshold),
+    asymptotic_std_ci(args.asymptotic_std_ci)
 {
     confidence_mean = args.confidence;
     confidence_std = args.filter_by_std? (args.confidence_std == -1? args.confidence : args.confidence_std) : -1;
@@ -31,7 +40,7 @@ int AupoAgent::getAction(ABS::Model* model, ABS::Gamestate* state, std::mt19937&
     auto init_state = model->copyState(state);
     auto* root = new AupoNode(model, init_state,0, rng);
     std::map<int,Mcts::gsToNodeMap<AupoNode*>> layerMap = {{0,{{init_state,root}}}};
-    AupoSearchStats search_stats = {budget, 0, 0, 0,&layerMap};
+    AupoSearchStats search_stats = {budget, 0, 0, 0,&layerMap,0,0,0,{},{}, {}, {}, {}, {}};
     const int total_forward_calls_before = model->getForwardCalls();
 
     while ( // Within budget
@@ -50,61 +59,31 @@ int AupoAgent::getAction(ABS::Model* model, ABS::Gamestate* state, std::mt19937&
         search_stats.total_forward_calls = model->getForwardCalls() - total_forward_calls_before;
     }
 
-    std::map<int,int>abs_visits;
-    std::map<int,double> abs_value;
-    std::map<int,std::set<int>> abstracted_with;
-    for(int a : *root->getTriedActions())
-        update_abstraction(root,a,abs_visits,abs_value,abstracted_with,search_stats);
-
-    //std::cout << a/(double)b << " " << c/(double)b <<  std::endl;
-    //print mean and std bounds of all root actions
-     //std::cout << "---------------------------" << std::endl;
-    // model->printState(state);
-    //     std::cout << global_id << std::endl;
-    //   // print action abstractions:
-    // for(int a : *root->getTriedActions()) {
-    //     std::cout << "Action " << a << " -> ";
-    //     for(auto pair : abstracted_with[a]) {
-    //         std::cout << pair << " ";
-    //     }
-    //     std::cout << root->getActionVisits(a) <<  std::endl;
-    // }
-    //
-    //  for(int i = use_rollout_distribution? -1: 0; i < distribution_layers; i++)
-    //  {
-    //    std::cout << "Root actions:" << std::endl;
-    //    for(const int action : *root->getTriedActions()) {
-    //    auto [mean_lower, mean_upper] = getRewardMeanBounds(action, i, confidence_mean, min_samples, search_stats);
-    //    auto [std_lower, std_upper] = confidence_std > 0? getRewardStdBounds(action, i, confidence_std, min_samples, search_stats) : std::pair<double,double>(0,0);
-    //    std::cout << "Action " << action << " visits:" << getLayerVisits(action,i, search_stats) << " mean: " << mean_lower << " " << mean_upper << " " << root->getQ(action) <<  " std: " << std_lower << " " << std_upper << std::endl;
-    //    }
-    //  }
-
-    // std::cout << budget.amount << " & ";
-    // auto sorted_actions = *root->getTriedActions();
-    // std::sort(sorted_actions.begin(), sorted_actions.end());
-    //
-    // for(int i = 0; i < sorted_actions.size(); i++) {
-    //     auto action = sorted_actions[i];
-    //     auto [mean_lower, mean_upper] = getRewardMeanBounds(action, 1, confidence_mean, min_samples, search_stats);
-    //     auto [std_lower, std_upper] = confidence_std > 0? getRewardStdBounds(action, 2, confidence_std, min_samples, search_stats) : std::pair<double,double>(0,0);
-    //
-    //     // std::cout << std::fixed << std::setprecision(2)
-    //     //   << " ("
-    //     //    << std::to_string(std_lower).substr(0, std::to_string(std_lower).find(".") + 3) << ", "
-    //     //    << std::to_string(std_upper).substr(0, std::to_string(std_upper).find(".") + 3) << ")"
-    //     //   << (i == sorted_actions.size()-1 ? "\\\\ \\hline" : "&");
-    //
-    //     std::cout << std::fixed << std::setprecision(2)
-    //       << " ("
-    //        << std::to_string(mean_lower).substr(0, std::to_string(mean_lower).find(".") + 3) << ", "
-    //        << std::to_string(mean_upper).substr(0, std::to_string(mean_upper).find(".") + 3) << ")"
-    //       << (i == root->getTriedActions()->size()-1 ? "\\\\ \\hline" : "&");
-    // }
-    // std::cout << std::endl;
-
-    const int best_action = decisionPolicy(root, rng, abs_visits, abs_value, abstracted_with, search_stats);
-    //std::cout << "Chosen action: " << best_action << std::endl;
+    int best_action;
+    if (!just_mcts){
+        std::map<int,int>abs_visits;
+        std::map<int,double> abs_value;
+        std::map<int,std::set<int>> abstracted_with;
+        for (auto& [layer, rewards] : search_stats.reward_history_per_layer)
+            std::sort(rewards.begin(), rewards.end());
+        for(int a : *root->getTriedActions())
+            update_abstraction(root,a,abs_visits,abs_value,abstracted_with,search_stats,rng);
+        best_action = decisionPolicy(root, rng, abs_visits, abs_value, abstracted_with, search_stats);
+    }else{
+        [[maybe_unused]] bool found = false;
+        double best_val = std::numeric_limits<double>::lowest();
+        auto dist = std::uniform_real_distribution<double>(-1.0, 1.0);
+        for (int action : *root->getTriedActions()){
+            double noise = TIEBREAKER_NOISE * dist(rng);
+            const double q_term = root->getActionValues(action) / (double) root->getActionVisits(action);
+            if(q_term + noise > best_val){
+                best_val = q_term + noise;
+                best_action = action;
+                found = true;
+            }
+        }
+        assert (found);
+    }
 
     //tree cleanup
     std::vector<AupoNode*> clear_stack = {root};
@@ -127,7 +106,7 @@ int AupoAgent::getAction(ABS::Model* model, ABS::Gamestate* state, std::mt19937&
         delete node;
     }
 
-    return best_action;
+    return distr_agent == nullptr? best_action : distr_agent->getAction(model, state, rng);
 }
 
 std::vector<std::tuple<AupoNode*,int,double>> AupoAgent::treePolicy(ABS::Model* model, AupoNode* node, std::mt19937& rng, AupoSearchStats& search_stats){
@@ -154,33 +133,32 @@ AupoNode* AupoAgent::selectNode(ABS::Model* model, AupoNode* node, bool& reached
 
     // Sample successor of state-action-pair
     auto sample_state = node->getStateCopy();
-    auto [rewards_tmp, outcome_and_probability] = model->applyAction(sample_state, chosen_action, rng);
+    auto [rewards_tmp, probability] = model->applyAction(sample_state, chosen_action, rng, nullptr);
     reward = rewards_tmp[0];
-    const auto [outcome, probability] = outcome_and_probability;
 
     const auto* successors = &node->getChildren()->at(chosen_action);
-    if (!node->getChildren()->at(chosen_action).contains(outcome))
+    if (!node->getChildren()->at(chosen_action).contains(sample_state))
     {
         // New successor sampled
         if( dag && (*search_stats.layerMap)[node->getDepth()+1].contains(sample_state))
         {
             auto* new_leaf = (*search_stats.layerMap)[node->getDepth()+1][sample_state];
-            (*node->getChildren())[chosen_action][outcome] = new_leaf;
-            delete sample_state;
+            (*node->getChildren())[chosen_action][sample_state] = new_leaf;
             return new_leaf;
         }else{
             auto* new_leaf = new AupoNode(model, sample_state, node->getDepth() + 1, rng);
             reached_leaf = true;
             if(dag)
                 (*search_stats.layerMap)[node->getDepth()+1][sample_state] = new_leaf;
-            (*node->getChildren())[chosen_action][outcome] = new_leaf;
+            (*node->getChildren())[chosen_action][sample_state] = new_leaf;
             return new_leaf; //we dont delete sample state here because it has to be saved in the new node
         }
     }
 
     // Already sampled successor
+    auto successor = successors->at(sample_state);
     delete sample_state;
-    return successors->at(outcome);
+    return successor;
 }
 
 void AupoAgent::filterBadActions(AupoNode *root, AupoSearchStats &search_stats, std::vector<int> &candidate_actions) {
@@ -242,9 +220,9 @@ int AupoAgent::selectAction(AupoNode* node, std::mt19937& rng, AupoSearchStats& 
     assert(!node->getTriedActions()->empty());
 
     //get exploration factor (global std)
-    double exploration_param = node->getDepth() >= exploration_parameter.size() ? exploration_parameter.back() : exploration_parameter[node->getDepth()];
+    double exploration_param = node->getDepth() >= static_cast<int>(exploration_parameter.size()) ? exploration_parameter.back() : exploration_parameter[node->getDepth()];
     const double q_var = std::max(0.0,search_stats.total_squared_v / (double)search_stats.global_num_vs - (search_stats.total_v / (double)search_stats.global_num_vs) *  (search_stats.total_v / (double)search_stats.global_num_vs));
-    double exp_factor = exploration_param == -1? 1.0 : (sqrt(q_var) * exploration_param);
+    double exp_factor = exploration_param == -1? 1.0 : (sqrt(q_var) *  exploration_param);
 
     //determine abstract action with UCT
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
@@ -287,7 +265,7 @@ std::pair<double,double> AupoAgent::rollout(std::vector<double>& rewards, ABS::M
         const int action = available_actions[dist(rng)];
 
         // Apply action and get rewards
-        auto [reward, outcome_and_probability] = model->applyAction(rollout_state, action, rng);
+        auto [reward, outcome_and_probability] = model->applyAction(rollout_state, action, rng, nullptr);
         episode_rew += reward[0] * total_discount;
         if(episode_step < distribution_layers)
             rewards[episode_step] = reward[0];
@@ -333,23 +311,26 @@ void AupoAgent::backup(std::vector<std::tuple<AupoNode*,int,double>>& path, std:
         search_stats.total_v += q;
         search_stats.total_squared_v += q*q;
 
-        search_stats.squared_rewards_per_layer[{action,-1}] += squared_value;
-        search_stats.rewards_per_layer[{action,-1}] += value;
-        search_stats.visits_per_layer[{action,-1}]++;
-        search_stats.mean_bound_cache.erase({action,-1});
-        search_stats.std_bound_cache.erase({action,-1});
+        if (!just_mcts){
+            search_stats.squared_rewards_per_layer[{action,-1}] += squared_value;
+            search_stats.rewards_per_layer[{action,-1}] += value;
+            search_stats.visits_per_layer[{action,-1}]++;
+            search_stats.mean_bound_cache.erase({action,-1});
+            search_stats.std_bound_cache.erase({action,-1});
+            search_stats.reward_history_per_layer[{action,-1}].push_back(value);
 
-        if(node->getDepth() == 0){
-            for(int i = 0; i < distribution_layers; i++){
-                auto downstream_reward =  i + node->getDepth() <= max_depth? rewards_per_layer.at(i+node->getDepth()) : rollout_rewards[i + node->getDepth() - max_depth - 1];
-                addLayerVisitsAndReward(action,i,downstream_reward,search_stats);
+            if(node->getDepth() == 0){
+                for(int i = 0; i < distribution_layers; i++){
+                    auto downstream_reward =  i + node->getDepth() <= max_depth? rewards_per_layer.at(i+node->getDepth()) : rollout_rewards[i + node->getDepth() - max_depth - 1];
+                    addLayerVisitsAndReward(action,i,downstream_reward,search_stats);
+                }
             }
         }
     }
 
 }
 
-void AupoAgent::update_abstraction(AupoNode* root, int action, std::map<int,int>& abs_visits, std::map<int,double>& abs_value, std::map<int,std::set<int>>& abstracted_with, AupoSearchStats& search_stats) {
+void AupoAgent::update_abstraction(AupoNode* root, int action, std::map<int,int>& abs_visits, std::map<int,double>& abs_value, std::map<int,std::set<int>>& abstracted_with, AupoSearchStats& search_stats, std::mt19937& rng) {
     assert (root->getDepth() == 0);
     abs_value[action] = 0;
     abs_visits[action] = 0;
@@ -362,6 +343,7 @@ void AupoAgent::update_abstraction(AupoNode* root, int action, std::map<int,int>
     }
     abstracted_with[action].clear();
 
+    //Setup confidence interval bounds
     std::vector<std::pair<double,double>> node_mean_bounds = std::vector<std::pair<double,double>>(distribution_layers, {0,0});
     std::vector<std::pair<double,double>> node_std_bounds = std::vector<std::pair<double,double>>(distribution_layers, {0,0});
     for(int i = 0; i < distribution_layers; i++) {
@@ -374,32 +356,86 @@ void AupoAgent::update_abstraction(AupoNode* root, int action, std::map<int,int>
         rollout_std_bounds = confidence_std > 0? getStdBounds(action, confidence_std, min_samples,search_stats) : std::pair<double,double>(0,0);
     }
 
+
     Mcts::gsToNodeMap<AupoNode*> this_pair = {{nullptr,root}};
     for(int other_action:  *root->getTriedActions()) {
         bool separated = false;
 
         for(int i = use_rollout_distribution? -1: 0; i < distribution_layers; i++) {
-            auto [node_mean_lower, node_mean_upper] = i == -1? rollout_mean_bounds : node_mean_bounds[i];
-            auto [node_std_lower, node_std_upper] = i == -1? rollout_std_bounds : node_std_bounds[i];
-            node_mean_lower -= TIEBREAKER_NOISE;
-            node_mean_upper += TIEBREAKER_NOISE;
-            node_std_lower -= TIEBREAKER_NOISE;
-            node_std_upper += TIEBREAKER_NOISE;
-            auto [other_mean_lower, other_mean_upper] = getRewardMeanBounds(other_action, i, confidence_mean, min_samples,search_stats);
-            auto [other_std_lower, other_std_upper] = confidence_std > 0? getRewardStdBounds(other_action, i, confidence_std, min_samples,search_stats) : std::pair<double,double>(0,0);
-            bool mean_cond = (node_mean_lower <= other_mean_upper && node_mean_upper >= other_mean_upper) ||
-                (node_mean_lower <= other_mean_lower && node_mean_upper >= other_mean_lower)
-                || (other_mean_lower <= node_mean_lower &&other_mean_upper >= node_mean_lower);
-            bool std_cond = confidence_std < 0 || (node_std_lower >= other_std_lower && node_std_lower <= other_std_upper) ||
-                (node_std_upper >= other_std_lower && node_std_upper <= other_std_upper)
-            || (node_std_lower <= other_std_lower && node_std_upper >= other_std_lower);
-            if(!mean_cond || !std_cond) {
-                separated = true;
-                break;
+            if (ks_threshold != -1) {
+                auto& reward_history_this = search_stats.reward_history_per_layer.at({action,i});
+                auto& reward_history_other = search_stats.reward_history_per_layer.at({other_action,i});
+                const std::size_t n = reward_history_this.size();
+                const std::size_t m = reward_history_other.size();
+
+                double d=0;
+                if (n == 0 && m == 0) d = 0;
+                else if (n == 0 || m == 0) d = 1;
+                else {
+                    std::size_t i = 0; // index into a
+                    std::size_t j = 0; // index into b
+
+                    while (i < n || j < m) {
+                        double x;
+                        if (i < n && (j == m || reward_history_this[i] < reward_history_other[j]))
+                            x = reward_history_this[i];
+                        else if (j < m && (i == n || reward_history_other[j] < reward_history_this[i]))
+                            x = reward_history_other[j];
+                        else
+                            x = reward_history_this[i];
+
+                        while (i < n && std::fabs(reward_history_this[i] - x) < TIEBREAKER_NOISE) ++i;
+                        while (j < m && std::fabs(reward_history_other[j] - x) < TIEBREAKER_NOISE) ++j;
+
+                        double Fa = static_cast<double>(i) / static_cast<double>(n);
+                        double Fb = static_cast<double>(j) / static_cast<double>(m);
+
+                        d = std::max(d, std::fabs(Fa - Fb));
+                    }
+                }
+
+                if (d > ks_threshold) {
+                    separated = true;
+                    break;
+                }
+
+            }
+            else if (earthmover_threshold != -1) {
+                double wasserstein_dist = 0;
+                auto& reward_history_this = search_stats.reward_history_per_layer.at({action,i});
+                auto& reward_history_other = search_stats.reward_history_per_layer.at({other_action,i});
+
+                for (size_t i = 0; i < std::min(reward_history_this.size(), reward_history_other.size()); i++)
+                    wasserstein_dist += std::abs((double)reward_history_this[i] - (double)reward_history_other[i]);
+                wasserstein_dist /= (double) std::min(reward_history_this.size(), reward_history_other.size());
+                if (wasserstein_dist > earthmover_threshold) {
+                    separated = true;
+                    break;
+                }
+            }
+            else{
+                auto [node_mean_lower, node_mean_upper] = i == -1? rollout_mean_bounds : node_mean_bounds[i];
+                auto [node_std_lower, node_std_upper] = i == -1? rollout_std_bounds : node_std_bounds[i];
+                node_mean_lower -= TIEBREAKER_NOISE;
+                node_mean_upper += TIEBREAKER_NOISE;
+                node_std_lower -= TIEBREAKER_NOISE;
+                node_std_upper += TIEBREAKER_NOISE;
+                auto [other_mean_lower, other_mean_upper] = getRewardMeanBounds(other_action, i, confidence_mean, min_samples,search_stats);
+                auto [other_std_lower, other_std_upper] = confidence_std > 0? getRewardStdBounds(other_action, i, confidence_std, min_samples,search_stats) : std::pair<double,double>(0,0);
+                bool mean_cond = (node_mean_lower <= other_mean_upper && node_mean_upper >= other_mean_upper) ||
+                    (node_mean_lower <= other_mean_lower && node_mean_upper >= other_mean_lower)
+                    || (other_mean_lower <= node_mean_lower &&other_mean_upper >= node_mean_lower);
+                bool std_cond = confidence_std < 0 || (node_std_lower >= other_std_lower && node_std_lower <= other_std_upper) ||
+                    (node_std_upper >= other_std_lower && node_std_upper <= other_std_upper)
+                || (node_std_lower <= other_std_lower && node_std_upper >= other_std_lower);
+                if(!mean_cond || !std_cond) {
+                    separated = true;
+                    break;
+                }
             }
         }
 
-        if(!separated) {
+        if((!separated && random_abs_prob == 0) || (random_abs_prob > 0 && (other_action == action || std::bernoulli_distribution(random_abs_prob)(rng)))) {
             abs_value[action] += root->getActionValues(other_action);
             abs_visits[action] += root->getActionVisits(other_action);
             abstracted_with[action].insert(other_action);
@@ -412,6 +448,8 @@ void AupoAgent::update_abstraction(AupoNode* root, int action, std::map<int,int>
         }
 
     }
+
+    assert(abstracted_with[action].contains(action));
 
 }
 
@@ -434,6 +472,7 @@ void AupoAgent::addLayerVisitsAndReward(int action, int layer, double reward, Au
     stats.squared_rewards_per_layer[{action,layer}] += reward * reward;
     stats.mean_bound_cache.erase({action,layer});
     stats.std_bound_cache.erase({action,layer});
+    stats.reward_history_per_layer[{action,layer}].push_back(reward);
 }
 
 std::pair<double,double> AupoAgent::getQBounds(const int action, const double confidence, int min_samples, AupoAgent::AupoSearchStats & stats, int parent_visits){
@@ -479,6 +518,30 @@ std::pair<double, double> AupoAgent::getRewardStdBounds(int action, int layer, d
     std::pair<double,double> bounds;
     if(!stats.visits_per_layer.contains({action,layer}) || stats.visits_per_layer.at({action,layer}) < min_samples)
         bounds = {std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max()};
+    else if (asymptotic_std_ci) {
+        int layer_visits = stats.visits_per_layer.at({action,layer});
+        double alpha = 1.0 - confidence;
+        double variance = getSampleVariance(action,layer,stats);
+        double z = confidence > 1? confidence : distr::normal_quantile(1 - alpha / 2);
+
+        double m2 = variance * (double)(layer_visits - 1) / (double)layer_visits;
+        if (m2 == 0)
+            return {0,0};
+
+        std::vector<double>& rewards = stats.reward_history_per_layer.at({action,layer});
+        double mean = stats.rewards_per_layer.at({action,layer}) / (double) layer_visits;
+        double m4 = 0;
+        for(double r : rewards)
+            m4 += pow(r - mean, 4);
+        m4 /= (double) layer_visits;
+
+        double kurtosis = m4 / (m2 * m2);
+
+        double lowerBound = sqrt(variance) - z*sqrt((kurtosis - 1) * variance  / (4.0 * (double) layer_visits));
+        double upperBound = sqrt(variance) + z*sqrt((kurtosis - 1) * variance / (4.0 * (double) layer_visits));
+
+        bounds = {std::max(0.0,lowerBound), std::max(0.0,upperBound)};
+    }
     else {
         int layer_visits = stats.visits_per_layer.at({action,layer});
         double alpha = 1.0 - confidence;

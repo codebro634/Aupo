@@ -8,6 +8,21 @@
 #include <filesystem>
 
 namespace distr {
+
+    std::pair<double,double> confidence_interval(double sum, double squared_sum, double n, double confidence, int min_samples) {
+        assert (confidence >= 0 && confidence <= 1);
+
+        if (n < min_samples)
+            return {std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max()};
+
+        int dofs = n - 1;
+        double mean = sum / n;
+        double sample_variance = std::max(0.0,squared_sum / n - std::pow(mean,2)) * n / static_cast<double>(dofs);
+        double studt_critical_value = distr::studt_quantile(1 - (1 -confidence) / 2, dofs, true);
+        double conf_range = studt_critical_value * sqrt(sample_variance / n);
+        return {mean - conf_range, mean + conf_range};
+    }
+
     std::vector<double> normal_quantiles;
 
     double normal_quantile(double p) {
@@ -62,7 +77,7 @@ namespace distr {
             file.close();
         }
         int idx = std::lround(p / 0.005 - 1);
-        if(df >= chi2_quantiles.size()) {
+        if(df >= static_cast<int>(chi2_quantiles.size())) {
             assert (approximate);
             return df + normal_quantile(p) * sqrt(2.0 * df);
         }else
@@ -95,7 +110,7 @@ namespace distr {
             file.close();
         }
         int idx = std::lround(p / 0.005 - 1);
-        if(df >= studt_quantiles.size()) {
+        if(df >= static_cast<int>(studt_quantiles.size())) {
             assert (approximate);
             return normal_quantile(p);
         }else

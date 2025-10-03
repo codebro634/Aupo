@@ -1,6 +1,8 @@
 seed: 42
 episodes: 2000
-executable: ./cmake-build-debug/BenchmarkGames.exe
+executable: ./cmake-build-debug/BenchmarkGamesRelease
+executable_dry_run: ./cmake-build-debug/BenchmarkGamesDebug
+omit_times: 1
 
 agents:
 
@@ -8,82 +10,120 @@ agents:
       agent_type: mcts
       agent_args:
         iterations: [100,200,500,1000,1500,2000]
-        expfacs: [-1;2, 2;2]
+        expfacs: [-1;0.5, -1;1, -1;2, -1;4, -1;8, -1;16, 0.5;0.5, 1;1, 2;2, 4;4, 8;8, 16;16]
         dag: [0]
         dynamic_exp_factor: [1]
-        rollout_length: [50]
+
+  - empirical_asap:
+      agent_type: asap
+      agent_args:
+        iterations: [ 100,200,500,1000,1500,2000 ]
+        l: [0]
+        expfacs: [ 0.5,1,2,4,8,16 ]
+        greedy_decision_inabs: [1]
+        final_abs_for_decision: [1]
+        empirical_model: [1]
+        group_partially_expanded_states: [ 0,1 ]
+        eps_t: [ 0, 0.2, 0.4, 0.8, 1.2, 1.6 ]
+        eps_a:
+          navigation: [ 0,999999 ]
+          trt: [ 0,999999 ]
+          ct: [ 0,999999 ]
+          aa: [ 0,999999 ]
+          st: [ 0,2,3,999999 ]
+          tam: [ 0,0.5,1.0,999999 ]
+          recon: [ 0,0.5,1.0,999999 ]
+          wf: [0,5,10,100,999999]
+          man: [ 0, 10,20,999999 ]
+          pushyl: [0,2,5,10,999999]
+          default: [ 0,1,2,999999 ]
+
+  - aupo_ks:
+      agent_type: aupo
+      agent_args:
+        iterations: [100,200,500,1000,1500,2000]
+        expfacs: [4;4]
+        ks_threshold: [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+        distribution_layers: [1,2,3,4]
+        min_samples: [0]
+        smart_uniform_sampling: [0]
+
+  - aupo_asymptotic:
+      agent_type: aupo
+      agent_args:
+        iterations: [100,200,500,1000,1500,2000]
+        expfacs: [4;4]
+        confidence: [0.8,0.9,0.95,0.99]
+        asymptotic_std_ci: [1]
+        distribution_layers: [1,2,3,4]
+        use_rollout_distribution: [0,1]
+        filter_by_std: [1]
+        min_samples: [0]
+        smart_uniform_sampling: [0]
 
   - aupo_all:
       agent_type: aupo
       agent_args:
         iterations: [100,200,500,1000,1500,2000]
-        expfacs: [-1;2]
+        expfacs: [-1;0.5, -1;1, -1;2, -1;4, -1;8, -1;16, 0.5;0.5, 1;1, 2;2, 4;4, 8;8, 16;16]
         confidence: [0.8,0.9,0.95,0.99]
         distribution_layers: [1,2,3,4]
         use_rollout_distribution: [0,1]
         filter_by_std: [0,1]
-        rollout_length: [50]
         min_samples: [0]
         smart_uniform_sampling: [0]
+
+  - random_abs:
+      agent_type: aupo
+      agent_args:
+        iterations: [100,200,500,1000,1500,2000]
+        expfacs: [-1;0.5, -1;1, -1;2, -1;4, -1;8, -1;16, 0.5;0.5, 1;1, 2;2, 4;4, 8;8, 16;16]
+        random_abs_prob: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
   - aupo_smart_sampling:
       agent_type: aupo
       agent_args:
         iterations: [ 100,200,500,1000,1500,2000 ]
-        expfacs: [ -1;2 ]
-        confidence: [ 0.8 ]
-        distribution_layers: [ 4 ]
-        use_rollout_distribution: [ 0 ]
-        filter_by_std: [ 0 ]
-        rollout_length: [ 50 ]
+        expfacs: [ -1;0.5, -1;1, -1;2, -1;4, -1;8, -1;16 ]
+        confidence: [0.8,0.9,0.95,0.99]
+        distribution_layers: [4]
+        use_rollout_distribution: [ 0,1 ]
+        filter_by_std: [ 0,1 ]
         min_samples: [ 20 ]
         smart_uniform_sampling: [ 1 ]
         smart_sampling_q: [0.5,0.75,0.9,0.95,0.99]
-
-  - aupo_uct_root:
-      agent_type: aupo
-      agent_args:
-        iterations: [ 100,200,500,1000,1500,2000 ]
-        expfacs: [ 2;2 ]
-        confidence: [ 0.8 ]
-        distribution_layers: [ 4 ]
-        use_rollout_distribution: [ 0 ]
-        filter_by_std: [ 0 ]
-        rollout_length: [ 50 ]
-        min_samples: [ 0 ]
-        smart_uniform_sampling: [ 0 ]
 
 models:
 
   - sa:
         model_type : sa
         model_args:
-            map: ../../resources/SysAdminTopologies/4.txt
+            map: ./resources/SysAdminTopologies/4_Anand.txt
         horizons: [ 50,50 ]
 
   - gol:
         model_type: gol
         model_args:
-            map: ../../resources/GameOfLifeMaps/3.txt
+            map: ./resources/GameOfLifeMaps/3_Anand.txt
         horizons: [ 50,50 ]
 
   - aa:
         model_type: aa
         model_args:
-              map: ../../resources/AcademicAdvisingCourses/2.txt
+              map: ./resources/AcademicAdvisingCourses/2_Anand.txt
               dense_rewards: 1
         horizons: [ 50,50 ]
 
   - tam:
         model_type: tam
         model_args:
-            map: ../../resources/TamariskMaps/2.txt
+            map: ./resources/TamariskMaps/2_IPPC.txt
         horizons: [ 50,50 ]
 
   - wf:
         model_type: wf
         model_args:
-            map: ../../resources/WildfireSetups/1.txt
+            map: ./resources/WildfireSetups/1_IPPC.txt
         horizons: [ 50,50 ]
 
   - mab:
@@ -94,25 +134,77 @@ models:
         repeats: 10
 
   - navigation:
-      model_type: navigation
-      model_args:
-        map: ../../resources/NavigationMaps/3.txt
-      horizons: [ 50,50 ]
+        model_type: navigation
+        model_args:
+            map: ./resources/NavigationMaps/3_Anand.txt
+        horizons: [ 50,50 ]
 
   - sw:
-      model_type: sw
+        model_type: sw
+        model_args:
+            size: 15
+        horizons: [ 50,50 ]
+
+  - ct:
+      model_type: ct
       model_args:
-        size: 15
-      horizons: [ 50,50 ]
+        idle_action: 1
+        width: 4
+        height: 3
+        spawn_rate: 0.5
+
+  - recon:
+      model_type: recon
+      model_args:
+        map: ./resources/CooperativeReconSetups/3_IPPC.txt
+
+  - eo:
+      model_type: eo
+      model_args:
+        map: ./resources/EarthObservationMaps/1_IPPC.txt
+
+  - man:
+      model_type: man
+      model_args:
+        map: ./resources/ManufacturerSetups/3_IPPC.txt
+
+  - rt:
+      model_type: rt
+      model_args:
+        map: ./resources/Racetracks/ring-2.track
+
+  - st:
+      model_type: st
+      model_args:
+        map: ./resources/SkillsTeachingSkills/5_IPPC.txt
+
+  - tr:
+      model_type: tr
+      model_args:
+        map: ./resources/TrafficModels/1_IPPC.txt
+
+  - saving:
+      model_type: saving
+      model_args:
+        p: 4
+        t: 4
+
+  - trt:
+      model_type: trt
+      model_args:
+        map: ./resources/TriangleTireworlds/5_IPPC.txt
+
+  - pushyl:
+      model_type: pushyl
+      model_args:
+        map: ./resources/DiceProbs/10_IPPC.txt
 
 pairings:
 
   - pair:
-      - agents: [aupo_uct_root, aupo_smart_sampling]
-      - models: [aa,gol,sa,tam,wf]
-
-  - pair:
-      - agents: [aupo_all, mcts]
-      - models: [aa,gol,sa,tam,wf, mab, sw, navigation]
-
-
+      - agents: [mcts,aupo_all, aupo_smart_sampling, random_abs, empirical_asap]
+      - models: [sa,gol,aa,tam,mab, sw, recon, eo, man, st, tr, saving, trt, pushyl]
+#
+#  - pair:
+#      - agents: [mcts,aupo_all, aupo_smart_sampling, random_abs]
+#      - models: [rt,ct,navigation]

@@ -35,6 +35,15 @@ namespace AUPO {
         bool smart_uniform_sampling = false;
         double smart_sampling_q = 0.9;
 
+        //for ablation study
+        double random_abs_prob = 0.0; // the chance at which an action pair is randomly soft-abstracted together
+        double earthmover_threshold = -1;
+        double ks_threshold = -1;
+        bool asymptotic_std_ci = false;
+
+        //for time measurements
+        bool just_mcts = false;
+        Agent* distr_agent = nullptr;
     };
 
     class AupoAgent final : public Agent
@@ -54,11 +63,15 @@ namespace AUPO {
         double confidence_mean;
         double confidence_std;
         bool dag;
-
-        //For smart sampling only
         int min_samples;
         bool smart_uniform_sampling;
         double smart_sampling_q;
+        double random_abs_prob;
+        bool just_mcts;
+        Agent* distr_agent ;
+        double earthmover_threshold;
+        double ks_threshold;
+        bool asymptotic_std_ci;
         constexpr static double TIEBREAKER_NOISE = 1e-6;
 
         struct AupoSearchStats
@@ -80,6 +93,8 @@ namespace AUPO {
             std::map<std::pair<int,int>, double> rewards_per_layer;
             std::map<std::pair<int,int>, double> squared_rewards_per_layer;
             std::map<std::pair<int,int>,int> visits_per_layer;
+
+            std::map<std::pair<int,int>, std::vector<double>> reward_history_per_layer;
         };
 
         std::vector<std::tuple<AupoNode*,int,double>> treePolicy(ABS::Model* model, AupoNode* node, std::mt19937& rng, AupoSearchStats& search_stats);
@@ -92,7 +107,7 @@ namespace AUPO {
         std::pair<double,double> rollout(std::vector<double>& rewards, ABS::Model* model, AupoNode* node, std::mt19937& rng, AupoSearchStats& search_stats) const;
         void backup(std::vector<std::tuple<AupoNode*,int,double>>& path, std::vector<double>& rollout_rewards, double value, double squared_value, AupoSearchStats& search_stats);
 
-        void update_abstraction(AupoNode* root, int action, std::map<int,int>& abs_visits, std::map<int,double>& abs_value, std::map<int,std::set<int>>& abstracted_with, AupoSearchStats& search_stats);
+        void update_abstraction(AupoNode* root, int action, std::map<int,int>& abs_visits, std::map<int,double>& abs_value, std::map<int,std::set<int>>& abstracted_with, AupoSearchStats& search_stats, std::mt19937& rng);
 
         //Downstream statistics for the root node
         [[nodiscard]] double getSampleVariance(int action, int layer, AupoSearchStats & stats);

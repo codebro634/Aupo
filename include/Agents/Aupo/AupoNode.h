@@ -12,6 +12,21 @@
 
 namespace AUPO {
 
+    struct GSHash {
+        size_t operator()(const ABS::Gamestate* p) const {
+            return p==nullptr? -1 : p->hash();
+        }
+    };
+
+    struct GSCompare {
+        bool operator()(const ABS::Gamestate* lhs, const ABS::Gamestate* rhs) const {
+            return (lhs == nullptr && rhs == nullptr) || (lhs != nullptr && rhs != nullptr && *lhs == *rhs);
+        }
+    };
+
+    template<class T>
+    using gsToNodeMap = std::unordered_map<ABS::Gamestate*, T, GSHash, GSCompare>;
+
     inline long global_id = 0;
 
     class AupoNode
@@ -37,7 +52,7 @@ namespace AUPO {
         [[nodiscard]] ABS::Model* getModel() const;
         [[nodiscard]] ABS::Gamestate* getStateCopy() const;
         [[nodiscard]] ABS::Gamestate* getState() const {return state;}
-        [[nodiscard]] std::map<int, std::map<int, AupoNode*>>* getChildren();
+        [[nodiscard]] std::map<int, gsToNodeMap<AupoNode*>>* getChildren();
         [[nodiscard]] int getPlayer() const;
 
 
@@ -58,7 +73,7 @@ namespace AUPO {
         // Model related stats
         ABS::Model* model;
         ABS::Gamestate* state;
-        std::map<int, std::map<int, AupoNode*>> children;
+        std::map<int, gsToNodeMap<AupoNode*>> children;
         std::map<int, int> action_visits;
         std::map<int, double> action_values;
         int depth;

@@ -63,7 +63,7 @@ private:
     int init_native_at{};
 
 protected:
-    std::pair<std::vector<double>, std::pair<int, double>> applyAction_(ABS::Gamestate* uncasted_state, int action, std::mt19937& rng) override;
+    std::pair<std::vector<double>, double> applyAction_(ABS::Gamestate* uncasted_state, int action, std::mt19937& rng, std::vector<std::pair<int,int>>* decision_outcomes) override;
     std::vector<int> getActions_(ABS::Gamestate* uncasted_state) override;
 
 public:
@@ -76,6 +76,7 @@ public:
     ABS::Gamestate* getInitialState(std::mt19937& rng) override;
     int getNumPlayers() override;
     ABS::Gamestate* copyState(ABS::Gamestate* uncasted_state) override;
+    bool hasTransitionProbs() override {return true;}
 
     [[nodiscard]] double getMinV(int steps) const override {
         if(COMBINATORIAL_ACTION_SPACE)
@@ -83,11 +84,16 @@ public:
         else {
             double min_step = -num_reaches * (COST_PER_INVADED_REACH + std::max(RESTORATION_COST,ERADICATION_COST));
             min_step -= num_slots * std::max(COST_PER_TREE, COST_PER_EMPTY_SLOT+ RESTORATION_COST_FOR_EMPTY_SLOT);
-            return min_step * (getHorizonLength() - steps);
+            return min_step * steps;
         }
     }
     [[nodiscard]] double getMaxV(int steps) const override {return 0;}
     [[nodiscard]] double getDistance(const ABS::Gamestate* a, const ABS::Gamestate* b) const override;
+
+    [[nodiscard]] std::vector<int> obsShape() const override;
+    void getObs(ABS::Gamestate* uncasted_state, int* obs) override;
+    [[nodiscard]] std::vector<int> actionShape() const override;
+    [[nodiscard]] int encodeAction(int* decoded_action) override;
 
 
 };
