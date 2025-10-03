@@ -6,19 +6,16 @@ This is the repository accompanying the paper "AUPO - Abstracted until proven ot
 contains the code to reproduce the experiments and the results of the paper.
 
 ## Abstract
-
-We introduce a novel, drop-in modification to Monte 
-Carlo Tree Search's (Mcts) decision policy that we call Aupo which significantly 
-enhances Mcts' performance on a range of benchmark problems. Aupo is an 
-automatic action abstraction algorithm that solely relies on reward 
-distribution statistics acquired during the Mcts. 
-Thus, unlike other automatic abstraction algorithms, 
-Aupo requires neither access to transition probabilities
-nor does Aupo require a directed acyclic search graph to build its 
-abstraction on allowing Aupo to detect symmetric actions which state-of-the-art 
-frameworks like ASAP struggle with. Furthermore, as Aupo 
-only affects the decision policy it is not mutually exclusive with other 
-abstraction techniques that only affect the tree search.
+We introduce a novel, drop-in modification to Monte Carlo Tree Search's (MCTS) decision policy 
+that we call AUPO. Comparisons based on a range of IPPC benchmark problems show that 
+AUPO clearly outperforms MCTS. AUPO is an automatic action abstraction algorithm that solely 
+relies on reward distribution statistics acquired during the MCTS. Thus, unlike other 
+automatic abstraction algorithms, AUPO requires neither access to transition
+probabilities nor does AUPO require a directed acyclic search graph to build its abstraction, 
+allowing AUPO to detect symmetric actions that state-of-the-art frameworks like ASAP 
+struggle with when the resulting symmetric states are far apart in state space. Furthermore, as 
+AUPO only affects the decision policy, it is not mutually exclusive with other abstraction 
+techniques that only affect the tree search.
 
 ## Installation
 
