@@ -14,53 +14,6 @@ agents:
         dag: [0]
         dynamic_exp_factor: [1]
 
-  - empirical_asap:
-      agent_type: asap
-      agent_args:
-        iterations: [ 100,200,500,1000,1500,2000 ]
-        l: [0]
-        expfacs: [ 0.5,1,2,4,8,16 ]
-        greedy_decision_inabs: [1]
-        final_abs_for_decision: [1]
-        empirical_model: [1]
-        group_partially_expanded_states: [ 0,1 ]
-        eps_t: [ 0, 0.2, 0.4, 0.8, 1.2, 1.6 ]
-        eps_a:
-          navigation: [ 0,999999 ]
-          trt: [ 0,999999 ]
-          ct: [ 0,999999 ]
-          aa: [ 0,999999 ]
-          st: [ 0,2,3,999999 ]
-          tam: [ 0,0.5,1.0,999999 ]
-          recon: [ 0,0.5,1.0,999999 ]
-          wf: [0,5,10,100,999999]
-          man: [ 0, 10,20,999999 ]
-          pushyl: [0,2,5,10,999999]
-          default: [ 0,1,2,999999 ]
-
-  - aupo_ks:
-      agent_type: aupo
-      agent_args:
-        iterations: [100,200,500,1000,1500,2000]
-        expfacs: [4;4]
-        ks_threshold: [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
-        distribution_layers: [1,2,3,4]
-        min_samples: [0]
-        smart_uniform_sampling: [0]
-
-  - aupo_asymptotic:
-      agent_type: aupo
-      agent_args:
-        iterations: [100,200,500,1000,1500,2000]
-        expfacs: [4;4]
-        confidence: [0.8,0.9,0.95,0.99]
-        asymptotic_std_ci: [1]
-        distribution_layers: [1,2,3,4]
-        use_rollout_distribution: [0,1]
-        filter_by_std: [1]
-        min_samples: [0]
-        smart_uniform_sampling: [0]
-
   - aupo_all:
       agent_type: aupo
       agent_args:
