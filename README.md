@@ -5,6 +5,22 @@
 This is the repository accompanying the paper "AUPO - Abstracted until proven otherwise: A reward distribution based abstraction algorithm" which
 contains the code to reproduce the experiments and the results of the paper.
 
+## Cite this work
+
+If you use this work, please cite it as:
+
+```bibtex
+@misc{schmöcker2025aupoabstractedproven,
+      title={AUPO - Abstracted Until Proven Otherwise: A Reward Distribution Based Abstraction Algorithm}, 
+      author={Robin Schmöcker and Alexander Dockhorn and Bodo Rosenhahn},
+      year={2025},
+      eprint={2510.23214},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2510.23214}, 
+}
+```
+
 ## Abstract
 We introduce a novel, drop-in modification to Monte Carlo Tree Search's (MCTS) decision policy 
 that we call AUPO. Comparisons based on a range of IPPC benchmark problems show that 
