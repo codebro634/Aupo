@@ -10,14 +10,12 @@ contains the code to reproduce the experiments and the results of the paper.
 If you use this work, please cite it as:
 
 ```bibtex
-@misc{schmöcker2025aupoabstractedproven,
-      title={AUPO - Abstracted Until Proven Otherwise: A Reward Distribution Based Abstraction Algorithm}, 
-      author={Robin Schmöcker and Alexander Dockhorn and Bodo Rosenhahn},
-      year={2025},
-      eprint={2510.23214},
-      archivePrefix={arXiv},
-      primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2510.23214}, 
+@inproceedings{AUPO26,
+  author       = {Robin Schmöcker and Alexander Dockhorn and Bodo Rosenhahn},
+  title        = {{AUPO - Abstracted Until Proven Otherwise: A Reward Distribution Based Abstraction Algorithm}},
+  booktitle    = {Proceedings of the Thirty-Thirdd International Conference on Automated Planning and Scheduling, {ICAPS} 2026, Dublin, Ireland June 27 - July 2, 2026},             
+  publisher    = {{AAAI}},
+  year         = {2026}
 }
 ```
 
