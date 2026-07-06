@@ -15,7 +15,7 @@ If you use this work, please cite it as:
   title        = {{AUPO - Abstracted Until Proven Otherwise: A Reward Distribution Based Abstraction Algorithm}},
   booktitle    = {Proceedings of the Thirty-Thirdd International Conference on Automated Planning and Scheduling, {ICAPS} 2026, Dublin, Ireland June 27 - July 2, 2026},             
   publisher    = {{AAAI}},
-  doi = {https://doi.org/10.1609/icaps.v36i1.42835},
+  doi          = {https://doi.org/10.1609/icaps.v36i1.42835},
   year         = {2026}
 }
 ```
